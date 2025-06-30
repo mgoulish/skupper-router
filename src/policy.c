@@ -33,6 +33,7 @@
 #include "adaptors/amqp/container.h"
 
 #include "qpid/dispatch/server.h"
+#include "qpid/dispatch/blackbox.h"
 
 #include <proton/condition.h>
 #include <proton/connection.h>
@@ -123,6 +124,7 @@ qd_policy_t *qd_policy(qd_dispatch_t *qd)
     sys_mutex_init(&stats_lock);
     sys_mutex_init(&policy->tree_lock);
 
+    bb_vwrite(thread_blackbox, "Policy Initialized\n");
     qd_log(LOG_POLICY, QD_LOG_DEBUG, "Policy Initialized");
     return policy;
 }
@@ -260,6 +262,8 @@ bool qd_policy_socket_accept(qd_policy_t *policy, const char *hostname)
         n_processed++;
         nc = n_connections;
         sys_mutex_unlock(&stats_lock);
+        bb_vwrite(thread_blackbox, 
+               "ALLOW Connection '%s' based on global connection count. nConnections= %d\n", hostname, nc);
         qd_log(LOG_POLICY, QD_LOG_DEBUG,
                "ALLOW Connection '%s' based on global connection count. nConnections= %d", hostname, nc);
     } else {
@@ -298,10 +302,12 @@ void qd_policy_socket_close(qd_policy_t *policy, const qd_connection_t *conn)
                 if (result) {
                     Py_XDECREF(result);
                 } else {
+                    bb_vwrite(thread_blackbox, "Internal: Connection close failed: result\n");
                     qd_log(LOG_POLICY, QD_LOG_DEBUG, "Internal: Connection close failed: result");
                 }
                 Py_XDECREF(close_connection);
             } else {
+                bb_vwrite(thread_blackbox, "Internal: Connection close failed: close_connection\n");
                 qd_log(LOG_POLICY, QD_LOG_DEBUG, "Internal: Connection close failed: close_connection");
             }
         }
@@ -310,6 +316,12 @@ void qd_policy_socket_close(qd_policy_t *policy, const qd_connection_t *conn)
     const char *hostname = qd_connection_name(conn);
     if (conn->policy_settings && conn->policy_settings->denialCounts) {
         qd_policy_denial_counts_t *qpdc = conn->policy_settings->denialCounts;
+        bb_vwrite(thread_blackbox, 
+               "] Connection '%s' closed with resources n_sessions=%d, n_senders=%d, n_receivers=%d, "
+               "sessions_denied=%" PRIu64 ", senders_denied=%" PRIu64 ", receivers_denied=%" PRIu64
+               ", max_message_size_denied:%" PRIu64 ", nConnections= %" PRIu64 ".\n",
+               conn->connection_id, hostname, conn->n_sessions, conn->n_senders, conn->n_receivers, qpdc->sessionDenied,
+               qpdc->senderDenied, qpdc->receiverDenied, qpdc->maxSizeMessagesDenied, nc);
         qd_log(LOG_POLICY, QD_LOG_DEBUG,
                "[C%" PRIu64
                "] Connection '%s' closed with resources n_sessions=%d, n_senders=%d, n_receivers=%d, "
@@ -441,10 +453,12 @@ bool qd_policy_lookup_vhost_alias(
                 free(res_string);
                 res = !!name_buf[0]; // settings name returned
             } else {
+                bb_vwrite(thread_blackbox, "Internal: lookup_vhost_alias: result\n");
                 qd_log(LOG_POLICY, QD_LOG_DEBUG, "Internal: lookup_vhost_alias: result");
             }
             Py_XDECREF(lookup_vhost_alias);
         } else {
+            bb_vwrite(thread_blackbox, "Internal: lookup_vhost_alias: lookup_vhost_alias\n");
             qd_log(LOG_POLICY, QD_LOG_DEBUG, "Internal: lookup_vhost_alias: lookup_vhost_alias");
         }
     }
@@ -499,16 +513,22 @@ bool qd_policy_open_lookup_user(
                 free(res_string);
                 res = !!name_buf[0]; // settings name returned
             } else {
+                bb_write(thread_blackbox, "Internal: lookup_user: result\n");
                 qd_log(LOG_POLICY, QD_LOG_DEBUG, "Internal: lookup_user: result");
             }
             Py_XDECREF(lookup_user);
         } else {
+            bb_write(thread_blackbox, "Internal: lookup_user: lookup_user\n");
             qd_log(LOG_POLICY, QD_LOG_DEBUG, "Internal: lookup_user: lookup_user");
         }
     }
     qd_python_unlock(lock_state);
 
     if (name_buf[0]) {
+        bb_vwrite(thread_blackbox, 
+               "[C%" PRIu64
+               "] ALLOW AMQP Open lookup_user: %s, rhost: %s, vhost: %s, connection: %s. Usergroup: '%s'%s\n",
+               conn_id, username, hostip, vhost, conn_name, name_buf, (res ? "" : " Internal error."));
         qd_log(LOG_POLICY, QD_LOG_DEBUG,
                "[C%" PRIu64
                "] ALLOW AMQP Open lookup_user: %s, rhost: %s, vhost: %s, connection: %s. Usergroup: '%s'%s",
@@ -575,14 +595,17 @@ bool qd_policy_open_fetch_settings(
                     }
                     Py_XDECREF(result2);
                 } else {
+                    bb_write(thread_blackbox, "Internal: lookup_user: result2\n");
                     qd_log(LOG_POLICY, QD_LOG_DEBUG, "Internal: lookup_user: result2");
                 }
                 Py_XDECREF(lookup_settings);
             } else {
+                bb_write(thread_blackbox, "Internal: lookup_user: lookup_settings\n");
                 qd_log(LOG_POLICY, QD_LOG_DEBUG, "Internal: lookup_user: lookup_settings");
             }
             Py_XDECREF(upolicy);
         } else {
+            bb_write(thread_blackbox, "Internal: lookup_user: upolicy\n");
             qd_log(LOG_POLICY, QD_LOG_DEBUG, "Internal: lookup_user: upolicy");
         }
     }
@@ -638,6 +661,9 @@ bool qd_policy_approve_amqp_session(pn_session_t *ssn, qd_connection_t *qd_conn)
     const char *hostip = qd_connection_remote_ip(qd_conn);
     const char *vhost = pn_connection_remote_hostname(conn);
     if (result) {
+        bb_vwrite(thread_blackbox, 
+               "[C%" PRIu64 "] ALLOW AMQP Begin Session. user: %s, rhost: %s, vhost: %s\n", qd_conn->connection_id,
+               qd_conn->user_id, hostip, vhost);
         qd_log(LOG_POLICY, QD_LOG_DEBUG,
                "[C%" PRIu64 "] ALLOW AMQP Begin Session. user: %s, rhost: %s, vhost: %s", qd_conn->connection_id,
                qd_conn->user_id, hostip, vhost);
@@ -1042,6 +1068,9 @@ bool qd_policy_approve_message_target(qd_iterator_t *address, qd_connection_t *q
 
     const char *hostip = qd_connection_remote_ip(qd_conn);
     const char *vhost = pn_connection_remote_hostname(qd_connection_pn(qd_conn));
+    bb_vwrite(thread_blackbox, 
+           "[C%" PRIu64 "] %s AMQP message to '%s' for user '%s', rhost '%s', vhost '%s' based on target address\n",
+           qd_conn->connection_id, (lookup ? "ALLOW" : "DENY"), target, qd_conn->user_id, hostip, vhost);
     qd_log(LOG_POLICY, (lookup ? QD_LOG_DEBUG : QD_LOG_INFO),
            "[C%" PRIu64 "] %s AMQP message to '%s' for user '%s', rhost '%s', vhost '%s' based on target address",
            qd_conn->connection_id, (lookup ? "ALLOW" : "DENY"), target, qd_conn->user_id, hostip, vhost);
@@ -1083,6 +1112,10 @@ bool qd_policy_approve_amqp_sender_link(pn_link_t *pn_link, qd_connection_t *qd_
         // a target is specified
         lookup = qd_policy_approve_link_name(qd_conn->user_id, qd_conn->policy_settings, target, false);
 
+        bb_vwrite(thread_blackbox, 
+               "[C%" PRIu64
+               "] %s AMQP Attach sender link '%s' for user '%s', rhost '%s', vhost '%s' based on link target name\n",
+               qd_conn->connection_id, (lookup ? "ALLOW" : "DENY"), target, qd_conn->user_id, hostip, vhost);
         qd_log(LOG_POLICY, (lookup ? QD_LOG_DEBUG : QD_LOG_INFO),
                "[C%" PRIu64
                "] %s AMQP Attach sender link '%s' for user '%s', rhost '%s', vhost '%s' based on link target name",
@@ -1096,6 +1129,9 @@ bool qd_policy_approve_amqp_sender_link(pn_link_t *pn_link, qd_connection_t *qd_
         // A sender with no remote target.
         // This happens all the time with anonymous relay
         lookup = qd_conn->policy_settings->spec.allowAnonymousSender;
+        bb_vwrite(thread_blackbox, 
+               "[C%" PRIu64 "] %s AMQP Attach anonymous sender for user '%s', rhost '%s', vhost '%s'\n",
+               qd_conn->connection_id, (lookup ? "ALLOW" : "DENY"), qd_conn->user_id, hostip, vhost);
         qd_log(LOG_POLICY, (lookup ? QD_LOG_DEBUG : QD_LOG_INFO),
                "[C%" PRIu64 "] %s AMQP Attach anonymous sender for user '%s', rhost '%s', vhost '%s'",
                qd_conn->connection_id, (lookup ? "ALLOW" : "DENY"), qd_conn->user_id, hostip, vhost);
@@ -1133,6 +1169,9 @@ bool qd_policy_approve_amqp_receiver_link(pn_link_t *pn_link, qd_connection_t *q
     bool dynamic_src = pn_terminus_is_dynamic(pn_link_remote_source(pn_link));
     if (dynamic_src) {
         bool lookup = qd_conn->policy_settings->spec.allowDynamicSource;
+        bb_vwrite(thread_blackbox, 
+               "[C%" PRIu64 "] %s AMQP Attach receiver dynamic source for user '%s', rhost '%s', vhost '%s',\n",
+               qd_conn->connection_id, (lookup ? "ALLOW" : "DENY"), qd_conn->user_id, hostip, vhost);
         qd_log(LOG_POLICY, (lookup ? QD_LOG_DEBUG : QD_LOG_INFO),
                "[C%" PRIu64 "] %s AMQP Attach receiver dynamic source for user '%s', rhost '%s', vhost '%s',",
                qd_conn->connection_id, (lookup ? "ALLOW" : "DENY"), qd_conn->user_id, hostip, vhost);
@@ -1147,6 +1186,10 @@ bool qd_policy_approve_amqp_receiver_link(pn_link_t *pn_link, qd_connection_t *q
         // a source is specified
         bool lookup = qd_policy_approve_link_name(qd_conn->user_id, qd_conn->policy_settings, source, true);
 
+        bb_vwrite(thread_blackbox, 
+               "[C%" PRIu64
+               "] %s AMQP Attach receiver link '%s' for user '%s', rhost '%s', vhost '%s' based on link source name\n",
+               qd_conn->connection_id, (lookup ? "ALLOW" : "DENY"), source, qd_conn->user_id, hostip, vhost);
         qd_log(LOG_POLICY, (lookup ? QD_LOG_DEBUG : QD_LOG_INFO),
                "[C%" PRIu64
                "] %s AMQP Attach receiver link '%s' for user '%s', rhost '%s', vhost '%s' based on link source name",
@@ -1367,6 +1410,8 @@ char * qd_policy_host_pattern_lookup(qd_policy_t *policy, const char *hostPatter
     if (!matched) {
         payload = 0;
     }
+    bb_vwrite(thread_blackbox, "vhost hostname pattern '%s' lookup returned '%s'\n", hostPattern,
+           (payload ? (char *) payload : "null"));
     qd_log(LOG_POLICY, QD_LOG_DEBUG, "vhost hostname pattern '%s' lookup returned '%s'", hostPattern,
            (payload ? (char *) payload : "null"));
     return payload;

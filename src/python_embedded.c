@@ -27,6 +27,7 @@
 #include "qpid/dispatch/error.h"
 #include "qpid/dispatch/log.h"
 #include "qpid/dispatch/router.h"
+#include "qpid/dispatch/blackbox.h"
 
 #include <proton/disposition.h>
 
@@ -150,8 +151,10 @@ static PyObject *parsed_to_py_string(qd_parsed_field_t *field)
     if (alloc)
         free(buffer);
 
-    if (!result)
+    if (!result) {
+        bb_vwrite(thread_blackbox, "Cannot convert field type 0x%X to python string object", tag);
         qd_log(LOG_PYTHON, QD_LOG_DEBUG, "Cannot convert field type 0x%X to python string object", tag);
+    }
 
     return result;
 }

@@ -33,6 +33,7 @@
 #include "qpid/dispatch/log.h"
 #include "qpid/dispatch/platform.h"
 #include "qpid/dispatch/timer.h"
+#include <qpid/dispatch/blackbox.h>
 
 #include "proton/version.h"
 
@@ -819,6 +820,7 @@ void qd_alloc_start_monitor(struct qd_dispatch_t *qd)
         int rc = sscanf(interval_str, "%u", &interval);
         if (rc == 1) {
             monitor_interval = 1000 * (qd_duration_t) interval;
+            bb_vwrite(thread_blackbox, "alloc_pool monitor interval overridden to %lu msecs", (unsigned long) monitor_interval);
             qd_log(LOG_ROUTER, QD_LOG_DEBUG, "alloc_pool monitor interval overridden to %lu msecs",
                    (unsigned long) monitor_interval);
         }

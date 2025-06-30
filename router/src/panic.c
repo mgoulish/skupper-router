@@ -27,6 +27,7 @@
 
 #include "qpid/dispatch/atomic.h"
 #include "qpid/dispatch/threading.h"
+#include "qpid/dispatch/blackbox.h"
 
 #include <assert.h>
 #include <dlfcn.h>
@@ -163,7 +164,7 @@ void panic_handler_init(void)
 
 //
 // The remaining routines are invoked by a signal handler. They must not invoke any function that is not Async Signal
-// Safe. See man signal(7) and man signal-safety(7). Ignore this sage advice at your on peril..
+// Safe. See man signal(7) and man signal-safety(7). Ignore this sage advice at your own peril..
 //
 
 #define BACKTRACE_LIMIT 64
@@ -422,6 +423,8 @@ static void panic_signal_handler(int signum, siginfo_t *siginfo, void *ucontext)
         while (true)
             sleep(10);  // signal safe
     }
+
+    bb_dump();
 
     print("\n*** SKUPPER-ROUTER FATAL ERROR ***\n");  // or "guru meditation error" (google it)
     print("Version: ");

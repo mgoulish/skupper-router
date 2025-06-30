@@ -61,6 +61,7 @@ set(qpid_dispatch_SOURCES
   amqp.c
   atomic.c
   bitmask.c
+  blackbox.c
   buffer.c
   enum.c
   error.c

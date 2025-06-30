@@ -30,6 +30,7 @@
 #include "qpid/dispatch/discriminator.h"
 #include "qpid/dispatch/atomic.h"
 #include "qpid/dispatch/error.h"
+#include "qpid/dispatch/blackbox.h"
 #include "entity.h"
 #include "dispatch_private.h"
 #include "buffer_field_api.h"
@@ -1123,6 +1124,7 @@ static void _vflow_emit_record_as_log_TH(vflow_record_t *record)
     }
 
     record->never_logged = false;
+    bb_write(thread_blackbox, line );
     qd_log(LOG_FLOW_LOG, log_level, "%s", line);
 }
 
@@ -2249,6 +2251,7 @@ static uint64_t _vflow_on_command_message(void                    *context,
         qd_iterator_t *subject_iter = qd_message_field_iterator(msg, QD_FIELD_SUBJECT);
         if (!!subject_iter) {
             if (qd_iterator_equal(subject_iter, (const unsigned char*) "FLUSH")) {
+                bb_write(thread_blackbox, "FLUSH request received");
                 qd_log(LOG_FLOW_LOG, QD_LOG_DEBUG, "FLUSH request received");
                 _vflow_post_work(_vflow_work(_vflow_refresh_events_TH));
             }
@@ -2405,6 +2408,7 @@ static uint64_t _vflow_on_co_record_message(void                    *context,
         qd_iterator_t *subject_iter = qd_message_field_iterator(msg, QD_FIELD_SUBJECT);
         if (!!subject_iter) {
             if (qd_iterator_equal(subject_iter, (const unsigned char*) "RECORD")) {
+                bb_write(thread_blackbox, "Co-Record update received");
                 qd_log(LOG_FLOW_LOG, QD_LOG_DEBUG, "Co-Record update received");
                 qd_iterator_t *body_iter = qd_message_field_iterator(msg, QD_FIELD_BODY);
                 if (!!body_iter) {

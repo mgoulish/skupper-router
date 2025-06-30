@@ -21,6 +21,7 @@
 #include "qpid/dispatch/python_embedded.h"
 
 #include "qpid/dispatch/server.h"
+#include "qpid/dispatch/blackbox.h"
 
 #include "config.h"
 #include "dispatch_private.h"

@@ -31,6 +31,7 @@
 #include "qpid/dispatch/atomic.h"
 #include "qpid/dispatch/ctools.h"
 #include "qpid/dispatch/internal/thread_annotations.h"
+#include "qpid/dispatch/blackbox.h"
 
 #include <assert.h>
 #include <pthread.h>
@@ -230,7 +231,8 @@ sys_thread_t *sys_thread(sys_thread_role_t role, void *(*run_function)(void *), 
     (void) rc;
     assert(rc == 0);
     pthread_setname_np(thread->thread, thread->name);
-
+    fprintf ( stderr, "MDEBUG sys_thread created |%s|\n", thread->name );
+    
     return thread;
 }
 

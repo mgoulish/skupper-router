@@ -34,6 +34,7 @@
 #include "qpid/dispatch/timer.h"
 #include "qpid/dispatch/connection_counters.h"
 #include "qpid/dispatch/tls_common.h"
+#include "qpid/dispatch/blackbox.h"
 
 #include <proton/connection_driver.h>
 #include <proton/object.h>
@@ -1046,6 +1047,8 @@ static int callback_amqpws(struct lws *wsi, enum lws_callback_reasons reason,
             return unexpected_close(c->wsi, pn_code(err));
         }
         strncpy(c->qd_conn->rhost_port, c->qd_conn->rhost, sizeof(c->qd_conn->rhost_port));
+        bb_vwrite(thread_blackbox, "[%" PRIu64 "] upgraded HTTP connection from %s to AMQPWS",
+               qd_connection_connection_id(c->qd_conn), qd_connection_name(c->qd_conn));
         qd_log(LOG_HTTP, QD_LOG_DEBUG, "[%" PRIu64 "] upgraded HTTP connection from %s to AMQPWS",
                qd_connection_connection_id(c->qd_conn), qd_connection_name(c->qd_conn));
         return handle_events(c);

@@ -35,6 +35,7 @@
 #include "qpid/dispatch/threading.h"
 #include <qpid/dispatch/cutthrough_utils.h>
 #include <qpid/dispatch/amqp_adaptor.h>
+#include <qpid/dispatch/blackbox.h>
 
 #include <proton/object.h>
 
@@ -1670,6 +1671,17 @@ static void qd_message_receive_cutthrough(qd_message_t *in_msg, pn_delivery_t *d
             // Data received, advance the producer slot pointer
             //
             notify_produced = true;
+            bb_vwrite ( thread_blackbox, "qd_message_receive_cutthrough - %u octets written to use_slot=%u", qd_buffer_list_length(&content->uct_slots[use_slot]), use_slot);
+
+            sys_atomic_set(&content->uct_produce_slot, (use_slot + 1) % UCT_SLOT_COUNT);
+            bb_vwrite(thread_blackbox, "qd_message_receive_cutthrough - %u octets written to use_slot=%u",
+                   qd_buffer_list_length(&content->uct_slots[use_slot]), use_slot);
+            sys_atomic_set(&content->uct_produce_slot, (use_slot + 1) % UCT_SLOT_COUNT);
+
+                bb_vwrite(thread_blackbox, 
+                   "qd_message_receive_cutthrough - %u octets written to use_slot=%u",
+                   qd_buffer_list_length(&content->uct_slots[use_slot]), use_slot);
+                   sys_atomic_set(&content->uct_produce_slot, (use_slot + 1) % UCT_SLOT_COUNT);
             qd_log(LOG_MESSAGE, QD_LOG_DEBUG, "qd_message_receive_cutthrough - %u octets written to use_slot=%u",
                    qd_buffer_list_length(&content->uct_slots[use_slot]), use_slot);
             sys_atomic_set(&content->uct_produce_slot, (use_slot + 1) % UCT_SLOT_COUNT);
@@ -2192,6 +2204,7 @@ ssize_t qd_message_send(qd_message_t *in_msg,
                 // retry later...
                 //
                 buf = 0;
+                bb_vwrite(thread_blackbox, "Link %s output limit reached", pn_link_name(pnl));
                 qd_log(LOG_MESSAGE, QD_LOG_DEBUG, "Link %s output limit reached", pn_link_name(pnl));
             }
         }

@@ -17,10 +17,15 @@
  * under the License.
  */
 
+#define _GNU_SOURCE
+#include <pthread.h>
+
 #include "module.h"
 #include "router_core_private.h"
 
 #include "qpid/dispatch/protocol_adaptor.h"
+#include "qpid/dispatch/blackbox.h"
+
 
 /**
  * Creates a thread that is dedicated to managing and using the routing table.
@@ -246,9 +251,11 @@ void *router_core_thread(void *arg)
         qdr_action_t *action = DEQ_HEAD(action_list);
         while (action) {
             DEQ_REMOVE_HEAD(action_list);
-            if (action->label)
+            if (action->label) {
+                bb_vwrite(thread_blackbox, "Core action '%s'%s\n", action->label, core->running ? "" : " (discard)");
                 qd_log(LOG_ROUTER_CORE, QD_LOG_DEBUG, "Core action '%s'%s", action->label,
                        core->running ? "" : " (discard)");
+            }
             action->action_handler(core, action, !core->running);
             free_qdr_action_t(action);
             action = DEQ_HEAD(action_list);

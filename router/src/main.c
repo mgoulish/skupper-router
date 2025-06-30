@@ -34,6 +34,8 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include <qpid/dispatch/blackbox.h>
+
 static int            exit_with_sigint = 0;
 static qd_dispatch_t *dispatch         = 0;
 static const char* argv0 = 0;
@@ -308,6 +310,9 @@ int main(int argc, char **argv)
     {"test-hooks", no_argument,    0, 'T'},
     {0,         0,                 0,  0}
     };
+
+    fprintf ( stderr, "Calling bb_new from main\n" );
+    thread_blackbox = bb_new(1024);
 
     while (1) {
         int c = getopt_long(argc, argv, "c:I:dP:U:h:vT", long_options, 0);
